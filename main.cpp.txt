@@ -1,0 +1,23 @@
+#include <iostream>
+#include <string>
+
+using namespace std;
+
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        cout << "الرجاء كتابة أمر بعد اسم البرنامج." << endl;
+        return 1;
+    }
+
+    string امر = argv[1];
+
+    if (امر == "اهلا") {
+        cout << "مرحباً بك من برنامج C++ التنفيذي!" << endl;
+    } else if (امر == "معلومات") {
+        cout << "هذا البرنامج يعمل بأداء عالي جداً بلغة C++." << endl;
+    } else {
+        cout << "أمر غير معروف: " << امر << endl;
+    }
+
+    return 0;
+}

@@ -1,0 +1,22 @@
+import sys
+
+def الرئيسية():
+    if len(sys.argv) < 2:
+        print("الاستخدام: python cli.py [الأمر]")
+        print("الأوامر المتاحة: مرحبا, مساعدة, تاريخ")
+        return
+
+    امر = sys.argv[1]
+
+    if امر == "مرحبا":
+        print("أهلاً بك! أنا مساعدك البرمجي.")
+    elif امر == "مساعدة":
+        print("هذه قائمة الأوامر المتاحة في النظام.")
+    elif امر == "تاريخ":
+        import datetime
+        print("التاريخ والوقت الحالي:", datetime.datetime.now())
+    else:
+        print(f"الأمر '{امر}' غير معروف.")
+
+if __name__ == "__main__":
+    الرئيسية()
