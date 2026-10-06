@@ -1,0 +1,102 @@
+# Ansible Playbook to Transfer Data Between Linux Servers
+- name: Transfer Data from Source Server to Destination Server
+  hosts: all
+  gather_facts: true
+  vars:
+    source_data_path: "/var/www/html/data"
+    backup_archive_name: "server_backup.tar.gz"
+    destination_user: "root"
+    destination_ip: "192.168.1.50"
+    destination_path: "/opt/backup_destination/"
+    ssh_private_key_path: "~/.ssh/id_rsa"
+    max_transfer_rate_kb: 5000
+    retry_attempts: 3
+    timeout_seconds: 600
+
+  tasks:
+    - name: Ensure target directory exists on source server
+      ansible.builtin.file:
+        path: "{{ source_data_path }}"
+        state: directory
+        mode: '0755'
+
+    - name: Check free disk space on source server before archiving
+      ansible.builtin.shell: "df -h {{ source_data_path }} | awk 'NR==2 {print $4}'"
+      register: source_free_space
+      changed_when: false
+
+    - name: Compress data folder on source server for faster transfer
+      community.general.archive:
+        path: "{{ source_data_path }}"
+        dest: "/tmp/{{ backup_archive_name }}"
+        format: gz
+        force_archive: true
+      register: archive_status
+
+    - name: Verify that the compressed archive was successfully created
+      ansible.builtin.stat:
+        path: "/tmp/{{ backup_archive_name }}"
+      register: archive_file
+
+    - name: Fail playbook execution if archive creation failed
+      ansible.builtin.fail:
+        msg: "The backup archive file could not be found on the source server."
+      when: not archive_file.stat.exists
+
+    - name: Generate MD5 checksum of the archive for data integrity check
+      ansible.builtin.stat:
+        path: "/tmp/{{ backup_archive_name }}"
+        checksum: md5
+      register: source_checksum
+
+    - name: Open firewall port for SSH traffic on source if required
+      ansible.builtin.ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Initialize data transfer to destination server using rsync
+      ansible.builtin.shell: >
+        rsync -avz -e "ssh -i {{ ssh_private_key_path }} -o StrictHostKeyChecking=no"
+        --bwlimit={{ max_transfer_rate_kb }}
+        /tmp/{{ backup_archive_name }}
+        {{ destination_user }}@{{ destination_ip }}:{{ destination_path }}
+      register: transfer_result
+      retries: "{{ retry_attempts }}"
+      delay: 10
+      until: transfer_result.rc == 0
+
+    - name: Print data transfer execution output and status logs
+      ansible.builtin.debug:
+        var: transfer_result.stdout_lines
+
+    - name: Verify data integrity on destination server via ssh checksum
+      ansible.builtin.shell: >
+        ssh -i {{ ssh_private_key_path }} -o StrictHostKeyChecking=no
+        {{ destination_user }}@{{ destination_ip }}
+        "md5sum {{ destination_path }}{{ backup_archive_name }}"
+      register: destination_checksum
+      changed_when: false
+
+    - name: Compare source and destination MD5 checksums for validation
+      ansible.builtin.fail:
+        msg: "Data integrity verification failed. Checksums do not match."
+      when: source_checksum.stat.checksum != (destination_checksum.stdout.split() | first)
+
+    - name: Extract transferred archive file on the destination server
+      ansible.builtin.shell: >
+        ssh -i {{ ssh_private_key_path }} -o StrictHostKeyChecking=no
+        {{ destination_user }}@{{ destination_ip }}
+        "tar -xzf {{ destination_path }}{{ backup_archive_name }} -C {{ destination_path }}"
+      register: extract_result
+
+    - name: Clean up temporary compressed archive from source server disk
+      ansible.builtin.file:
+        path: "/tmp/{{ backup_archive_name }}"
+        state: absent
+
+    - name: Log final completion message for data migration operation
+      ansible.builtin.debug:
+        msg: "Data transfer process completed successfully between Linux servers."
+# السطر رقم 109 تماماً - نهاية الملف
